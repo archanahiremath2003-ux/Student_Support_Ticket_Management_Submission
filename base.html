@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Help Desk{% endblock %} - College Help Desk</title>
+  <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand-md navbar-dark bg-primary mb-4">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('home') if me else url_for('login') }}">College Help Desk</a>
+    {% if me %}
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        {% if me.role == 'admin' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        {% endif %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('tickets') }}">{{ 'My tickets' if me.role == 'student' else 'Tickets' }}
+          {% if todo_count %}<span class="badge bg-warning text-dark">{{ todo_count }}</span>{% endif %}</a></li>
+        {% if me.role == 'student' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('new_ticket') }}">Raise a ticket</a></li>
+        {% endif %}
+        {% if me.role == 'admin' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('users') }}">Users</a></li>
+        {% endif %}
+      </ul>
+      <span class="navbar-text me-3">{{ me.name }} ({{ ROLE_LABELS[me.role] }}{% if me.department %}, {{ me.department.name }}{% endif %})</span>
+      <a class="btn btn-sm btn-outline-light me-2" href="{{ url_for('change_password') }}">Change password</a>
+      <a class="btn btn-sm btn-light" href="{{ url_for('logout') }}">Logout</a>
+    </div>
+    {% endif %}
+  </div>
+</nav>
+<main class="container pb-5">
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+  <div class="alert alert-{{ category }}">{{ message }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

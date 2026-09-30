@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Raise a ticket{% endblock %}
+{% block content %}
+<div class="row"><div class="col-lg-7">
+<h3>Raise a ticket</h3>
+<form method="post" class="card card-body shadow-sm">
+  {{ csrf_field() }}
+  <label class="form-label" for="category">What is it about?</label>
+  <select class="form-select mb-2" id="category" name="category_id" required>
+    <option value="">Choose</option>
+    {% for c in categories %}
+    <option value="{{ c.id }}" data-types="{{ c.subtypes }}" data-dept="{{ c.department.name }}" data-prio="{{ c.default_priority }}"
+      {{ 'selected' if form.get('category_id') == c.id|string }}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  <div id="hint" class="form-text mb-3"></div>
+
+  <div id="typebox" class="mb-3" style="display:none">
+    <label class="form-label" for="subcategory">Type of request</label>
+    <select class="form-select" id="subcategory" name="subcategory"></select>
+  </div>
+
+  <label class="form-label" for="subject">Title</label>
+  <input class="form-control mb-3" id="subject" name="subject" maxlength="160" required value="{{ form.get('subject', '') }}"
+         placeholder="Example: UPI payment not showing on portal">
+
+  <label class="form-label" for="description">Details</label>
+  <textarea class="form-control mb-3" id="description" name="description" rows="5" required
+            placeholder="Dates, amounts, transaction ID, subject name. Anything that helps the office.">{{ form.get('description', '') }}</textarea>
+  <div><button class="btn btn-primary">Submit</button> <a class="btn btn-link" href="{{ url_for('tickets') }}">Cancel</a></div>
+</form>
+</div></div>
+<script>
+  var limits = {{ limits | tojson }};
+  var chosen = {{ form.get('subcategory', '') | tojson }};
+  var cat = document.getElementById('category');
+  function update() {
+    var opt = cat.options[cat.selectedIndex];
+    var sub = document.getElementById('subcategory');
+    sub.innerHTML = '';
+    if (!opt.value) { document.getElementById('typebox').style.display = 'none'; document.getElementById('hint').textContent = ''; return; }
+    var types = opt.dataset.types ? opt.dataset.types.split('|') : [];
+    types.forEach(function (t) { var o = new Option(t, t); o.selected = (t === chosen); sub.add(o); });
+    document.getElementById('typebox').style.display = types.length ? 'block' : 'none';
+    var l = limits[opt.dataset.prio];
+    document.getElementById('hint').textContent = 'Goes to ' + opt.dataset.dept + '. First reply within ' + l[0] +
+      ', solved within ' + l[1] + ' (office hours, Mon to Sat).';
+  }
+  cat.addEventListener('change', update);
+  update();
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Student registration{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h3>Student registration</h3>
+    <form method="post" class="card card-body shadow-sm">
+      {{ csrf_field() }}
+      <label class="form-label" for="name">Full name</label>
+      <input class="form-control mb-3" id="name" name="name" required value="{{ form.get('name', '') }}">
+      <div class="row">
+        <div class="col"><label class="form-label" for="roll_no">Roll number</label>
+          <input class="form-control mb-3" id="roll_no" name="roll_no" required value="{{ form.get('roll_no', '') }}"></div>
+        <div class="col"><label class="form-label" for="program">Course and year</label>
+          <input class="form-control mb-3" id="program" name="program" value="{{ form.get('program', '') }}" placeholder="MCA, 2nd year"></div>
+      </div>
+      <label class="form-label" for="username">Username</label>
+      <input class="form-control mb-3" id="username" name="username" required value="{{ form.get('username', '') }}">
+      <div class="row">
+        <div class="col"><label class="form-label" for="password">Password (at least 8 characters)</label>
+          <input class="form-control mb-3" type="password" id="password" name="password" required minlength="8"></div>
+        <div class="col"><label class="form-label" for="confirm">Confirm password</label>
+          <input class="form-control mb-3" type="password" id="confirm" name="confirm" required></div>
+      </div>
+      <button class="btn btn-primary">Register</button>
+      <p class="small mt-3 mb-0">Already registered? <a href="{{ url_for('login') }}">Login</a></p>
+    </form>
+  </div>
+</div>
+{% endblock %}

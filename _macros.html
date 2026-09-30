@@ -1,0 +1,27 @@
+{% macro status(t) %}
+{% set colors = {'new': 'primary', 'assigned': 'info text-dark', 'in_progress': 'info text-dark',
+                 'waiting_student': 'warning text-dark', 'waiting_other': 'secondary',
+                 'resolved': 'success', 'closed': 'dark', 'rejected': 'danger', 'cancelled': 'secondary'} %}
+<span class="badge bg-{{ colors[t.status] }}">{{ t.status_label }}</span>
+{% endmacro %}
+
+{% macro priority(p) %}
+{% set colors = {'low': 'light text-dark border', 'medium': 'light text-dark border', 'high': 'warning text-dark', 'urgent': 'danger'} %}
+<span class="badge bg-{{ colors[p] }}">{{ PRIORITY_LABELS[p] }}</span>
+{% endmacro %}
+
+{% macro sla(i) %}
+{% set colors = {'on_track': 'success', 'at_risk': 'warning', 'breached': 'danger', 'paused': 'secondary',
+                 'met': 'success', 'missed': 'danger', 'stopped': 'secondary'} %}
+<div class="progress" style="height: 6px">
+  <div class="progress-bar bg-{{ colors[i.state] }}" style="width: {{ [i.pct * 100, 100] | min }}%"></div>
+</div>
+<small class="{{ 'text-danger fw-bold' if i.state == 'breached' else 'text-muted' }}">
+  {% if i.state == 'breached' %}Late by {{ (-i.remaining) | dur }}{% if not i.running %} (paused){% endif %}
+  {% elif i.state == 'paused' %}Paused, {{ i.remaining | dur }} left
+  {% elif i.state in ['on_track', 'at_risk'] %}{{ i.remaining | dur }} left
+  {% elif i.state == 'met' %}Done in time
+  {% elif i.state == 'missed' %}Done late
+  {% else %}Stopped{% endif %}
+</small>
+{% endmacro %}

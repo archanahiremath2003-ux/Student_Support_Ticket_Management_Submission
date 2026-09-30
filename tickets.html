@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Tickets{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">{{ 'My tickets' if me.role == 'student' else 'Tickets' }}</h3>
+  {% if me.role == 'student' %}<a class="btn btn-primary" href="{{ url_for('new_ticket') }}">Raise a ticket</a>{% endif %}
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  {% for key, label in tabs %}
+    {% if not (key == 'queue' and me.role == 'staff' and not (me.can_take or me.can_assign)) %}
+    <li class="nav-item"><a class="nav-link {{ 'active' if tab == key }}" href="{{ url_for('tickets', tab=key) }}">
+      {{ label }} <span class="badge bg-secondary">{{ counts[key] }}</span></a></li>
+    {% endif %}
+  {% endfor %}
+</ul>
+
+{% if me.role == 'admin' %}
+<form class="row g-2 mb-3" method="get">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div class="col-md-3"><input class="form-control" name="q" value="{{ f.q }}" placeholder="Search code, title, student, roll no"></div>
+  <div class="col-md-2"><select class="form-select" name="department"><option value="">All departments</option>
+    {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if f.department == d.id|string }}>{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="category"><option value="">All categories</option>
+    {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if f.category == c.id|string }}>{{ c.name }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="priority"><option value="">All priorities</option>
+    {% for p in priorities %}<option value="{{ p }}" {{ 'selected' if f.priority == p }}>{{ PRIORITY_LABELS[p] }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><button class="btn btn-outline-primary">Filter</button> <a class="btn btn-link" href="{{ url_for('tickets', tab=tab) }}">Clear</a></div>
+</form>
+{% endif %}
+
+{% if items %}
+<div class="table-responsive bg-white border rounded">
+<table class="table table-hover mb-0">
+  <thead class="table-light"><tr>
+    <th>Ticket</th>
+    {% if reasons %}<th>Why it needs you</th>{% endif %}
+    <th>Status</th><th>Priority</th><th>Next step with</th><th class="sla-col">Time limit</th><th>Raised</th>
+    {% if tab == 'queue' and can_take %}<th></th>{% endif %}
+  </tr></thead>
+  <tbody>
+  {% for t in items %}
+  <tr>
+    <td><a href="{{ url_for('ticket', ticket_id=t.id) }}" class="fw-semibold">{{ t.code }}: {{ t.subject }}</a><br>
+      <small class="text-muted">{{ t.category.name }}{% if me.role != 'student' %}, {{ t.student.name }}{% endif %}{% if me.role == 'admin' %}, {{ t.department.name }}{% endif %}</small>
+      {% if t.escalation_level and t.escalation_acked_level < t.escalation_level %}<span class="badge bg-danger">Escalated</span>{% endif %}
+    </td>
+    {% if reasons %}<td><small>{{ reasons[t.id] }}</small></td>{% endif %}
+    <td>{{ m.status(t) }}</td>
+    <td>{{ m.priority(t.priority) }}</td>
+    <td><small>{{ move[t.id] }}</small></td>
+    <td class="sla-col">{{ m.sla(info[t.id]) }}</td>
+    <td><small>{{ t.created_at | ago(now) }} ago</small></td>
+    {% if tab == 'queue' and can_take %}<td>
+      <form method="post" action="{{ url_for('ticket_action', ticket_id=t.id, action='take') }}">
+        {{ csrf_field() }}<input type="hidden" name="version" value="{{ t.version }}">
+        <button class="btn btn-sm btn-primary">Take</button></form></td>{% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="alert alert-light border">
+  {% if me.role == 'student' and tab == 'pending' %}No pending tickets. Use "Raise a ticket" for fees, attendance, ID card, documents or certificates.
+  {% elif tab == 'action' %}Nothing needs your action right now.
+  {% else %}No tickets here.{% endif %}
+</div>
+{% endif %}
+{% endblock %}

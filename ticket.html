@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}{{ t.code }}{% endblock %}
+{% block content %}
+{% set staff_side = me.role != 'student' %}
+{% macro form_start(action) %}<form method="post" action="{{ url_for('ticket_action', ticket_id=t.id, action=action) }}">{{ csrf_field() }}<input type="hidden" name="version" value="{{ t.version }}">{% endmacro %}
+
+<p class="mb-1"><a href="{{ url_for('tickets') }}">Back to tickets</a></p>
+<h3>{{ t.code }}: {{ t.subject }}</h3>
+<p>{{ m.status(t) }} {{ m.priority(t.priority) }}
+  {% if t.escalation_level %}<span class="badge bg-danger">Escalated level {{ t.escalation_level }}{% if t.escalation_acked_level >= t.escalation_level %}, acknowledged{% endif %}</span>{% endif %}
+  <span class="text-muted ms-2">{{ t.category.name }}{% if t.subcategory %} / {{ t.subcategory }}{% endif %}</span></p>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-body">
+        <p class="text-muted small mb-2">Raised by {{ t.student.name }}{% if staff_side %} ({{ t.student.roll_no }}{% if t.student.program %}, {{ t.student.program }}{% endif %}){% endif %} on {{ t.created_at | ist }}</p>
+        <p class="mb-0" style="white-space: pre-wrap">{{ t.description }}</p>
+        {% if t.status == 'waiting_other' %}<div class="alert alert-secondary mt-3 mb-0">On hold: {{ t.hold_reason }}. Follow-up by {{ t.hold_until.strftime('%d %b %Y') }}.</div>{% endif %}
+        {% if t.resolution_note and t.status in ['resolved', 'closed'] %}<div class="alert alert-success mt-3 mb-0"><b>Solution:</b> {{ t.resolution_note }}</div>{% endif %}
+      </div>
+    </div>
+
+    <h5>History</h5>
+    <ul class="list-group mb-4 timeline">
+    {% for e in events %}
+      <li class="list-group-item {{ 'internal' if e.is_internal }}">
+        <small class="text-muted float-end">{{ e.created_at | ist }}</small>
+        <b>{{ e.actor.name if e.actor else 'System' }}</b>
+        {% if e.kind == 'created' %}raised the ticket
+        {% elif e.kind == 'status' %}changed status: {{ STATUS_LABELS[e.from_value] }} to {{ STATUS_LABELS[e.to_value] }}
+        {% elif e.kind == 'assigned' %}{% if e.from_value %}moved it from {{ e.from_value }} to {{ e.to_value }}{% else %}assigned it to {{ e.to_value }}{% endif %}
+        {% elif e.kind == 'transferred' %}transferred it from {{ e.from_value }} to {{ e.to_value }}
+        {% elif e.kind == 'resolved' %}marked it resolved ({{ e.to_value }})
+        {% elif e.kind == 'reopened' %}reopened it
+        {% elif e.kind == 'priority' %}changed priority: {{ PRIORITY_LABELS[e.from_value] }} to {{ PRIORITY_LABELS[e.to_value] }}
+        {% elif e.kind == 'escalated' %}escalated it ({{ e.to_value }})
+        {% elif e.kind == 'acknowledged' %}acknowledged the escalation
+        {% elif e.kind == 'reminder' %}sent a reminder
+        {% elif e.kind == 'comment' %}{{ 'added an internal note' if e.is_internal else 'wrote' }}
+        {% else %}note{% endif %}
+        {% if e.is_internal and staff_side %}<span class="badge bg-warning text-dark">Internal</span>{% endif %}
+        {% if e.note %}<div class="note mt-1">{{ e.note }}</div>{% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+
+    {% if 'comment' in acts %}
+    {{ form_start('comment') }}
+      <label class="form-label fw-semibold" for="text">{{ 'Reply to the office' if me.role == 'student' and t.status == 'waiting_student' else 'Write a reply' }}</label>
+      <textarea class="form-control mb-2" id="text" name="text" rows="3" required></textarea>
+      {% if staff_side %}
+      <div class="mb-2"><small class="text-muted">Suggested replies (optional, click to use and edit):</small><br>
+        {% for s in suggestions %}<button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 suggest" data-text="{{ s }}">{{ s[:45] }}{{ '...' if s|length > 45 }}</button>{% endfor %}
+      </div>
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="internal" value="1" id="internal">
+        <label class="form-check-label" for="internal">Internal note (student cannot see it)</label></div>
+      {% endif %}
+      <button class="btn btn-primary">Send</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-3 border-primary">
+      <div class="card-body">
+        <small class="text-muted">Next step is with</small>
+        <h5 class="mb-0">{{ move }}</h5>
+      </div>
+    </div>
+
+    <div class="card mb-3"><div class="card-body">
+      <h6>Time limit</h6>
+      {{ m.sla(info) }}
+      <p class="small mb-1 mt-2">Limit: {{ info.target | friendly }} (office hours).
+        {% if info.running %}Due {{ info.due | ist }}.{% endif %}
+        {% if info.paused >= 1 %}Paused for {{ info.paused | dur }} while waiting.{% endif %}</p>
+      <p class="small mb-0">First reply:
+        {% if info.response == 'met' %}on time{% elif info.response == 'late' %}<span class="text-danger">late</span>{% elif info.response == 'overdue' %}<span class="text-danger">overdue</span>{% elif info.response == 'pending' %}due {{ info.response_due | ist }}{% else %}not needed{% endif %}</p>
+    </div></div>
+
+    <div class="card mb-3"><div class="card-body small">
+      <table class="table table-sm mb-0">
+        <tr><td class="text-muted">Department</td><td>{{ t.department.name }}</td></tr>
+        <tr><td class="text-muted">Handled by</td><td>{{ t.assignee.name if t.assignee else 'Not assigned yet' }}</td></tr>
+        <tr><td class="text-muted">Age</td><td>{{ t.created_at | ago(now) }}</td></tr>
+        <tr><td class="text-muted">In this status</td><td>{{ t.status_changed_at | ago(now) }}</td></tr>
+        {% if staff_side %}
+        <tr><td class="text-muted">Transfers</td><td>{{ t.transfer_count }}</td></tr>
+        <tr><td class="text-muted">Reopened</td><td>{{ t.reopen_count }}</td></tr>
+        {% endif %}
+      </table>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <h6>Actions</h6>
+      {% set any_action = acts | reject('in', ['comment', 'note']) | list %}
+      {% if not any_action %}<p class="small text-muted mb-0">
+        {% if t.status in ['closed', 'rejected', 'cancelled'] %}This ticket is finished.{% if me.role == 'student' %} Raise a new ticket if you still need help.{% endif %}
+        {% elif me.role == 'staff' and t.assignee_id != me.id %}Only the person handling it or the admin can change this ticket.
+        {% elif t.status == 'resolved' %}Waiting for the student to confirm or reopen.
+        {% else %}Nothing to do right now.{% endif %}</p>{% endif %}
+
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        {% if 'take' in acts %}{{ form_start('take') }}<button class="btn btn-primary btn-sm">Take this ticket</button></form>{% endif %}
+        {% if 'start' in acts %}{{ form_start('start') }}<button class="btn btn-primary btn-sm">Start work</button></form>{% endif %}
+        {% if 'resume' in acts %}{{ form_start('resume') }}<button class="btn btn-outline-primary btn-sm">Resume work</button></form>{% endif %}
+        {% if 'confirm' in acts %}{{ form_start('confirm') }}<button class="btn btn-success btn-sm">Yes, it is solved</button></form>{% endif %}
+      </div>
+
+      {% if 'acknowledge' in acts %}
+      <details class="mb-2" open><summary>Acknowledge escalation</summary>
+        {{ form_start('acknowledge') }}
+        <textarea class="form-control form-control-sm my-2" name="note" rows="2" required placeholder="Action plan: who does what, by when"></textarea>
+        <button class="btn btn-sm btn-danger">Acknowledge</button></form></details>
+      {% endif %}
+      {% if 'reopen' in acts %}
+      <details class="mb-2"><summary>Not solved? Reopen</summary>
+        {{ form_start('reopen') }}
+        <textarea class="form-control form-control-sm my-2" name="reason" rows="2" required placeholder="What is still wrong?"></textarea>
+        <button class="btn btn-sm btn-warning">Reopen</button></form>
+        <small class="text-muted">If you do nothing, it closes after 3 office days.</small></details>
+      {% endif %}
+      {% if 'resolve' in acts %}
+      <details class="mb-2"><summary>Mark as resolved</summary>
+        {{ form_start('resolve') }}
+        <select class="form-select form-select-sm my-2" name="resolution_type">{% for r in resolution_types %}<option>{{ r }}</option>{% endfor %}</select>
+        <textarea class="form-control form-control-sm mb-2" name="note" rows="2" required placeholder="What was done (the student sees this)"></textarea>
+        <button class="btn btn-sm btn-success">Resolve</button></form></details>
+      {% endif %}
+      {% if 'request_info' in acts %}
+      <details class="mb-2"><summary>Ask the student something</summary>
+        {{ form_start('request_info') }}
+        <textarea class="form-control form-control-sm my-2" name="text" rows="2" required></textarea>
+        <small class="text-muted d-block mb-2">Time limit pauses until they reply.</small>
+        <button class="btn btn-sm btn-primary">Send and wait</button></form></details>
+      {% endif %}
+      {% if 'hold' in acts %}
+      <details class="mb-2"><summary>Put on hold</summary>
+        {{ form_start('hold') }}
+        <input class="form-control form-control-sm my-2" name="reason" required maxlength="200" placeholder="Waiting for (e.g. university)">
+        <label class="small">Follow up by</label>
+        <input class="form-control form-control-sm mb-2" type="date" name="until" required min="{{ today.isoformat() }}">
+        <button class="btn btn-sm btn-secondary">Put on hold</button></form></details>
+      {% endif %}
+      {% if 'assign' in acts %}
+      <details class="mb-2"><summary>{{ 'Assign' if not t.assignee else 'Reassign' }}</summary>
+        {{ form_start('assign') }}
+        <select class="form-select form-select-sm my-2" name="owner_id">
+          {% for s in staff_list if s.id != t.assignee_id %}<option value="{{ s.id }}">{{ s.name }}</option>{% else %}<option value="">No available staff in {{ t.department.name }}</option>{% endfor %}
+        </select>
+        {% if t.assignee %}<input class="form-control form-control-sm mb-2" name="reason" required placeholder="Reason">{% endif %}
+        <button class="btn btn-sm btn-primary">Save</button></form></details>
+      {% endif %}
+      {% if 'transfer' in acts %}
+      <details class="mb-2"><summary>Transfer to another department</summary>
+        {{ form_start('transfer') }}
+        <select class="form-select form-select-sm my-2" name="department_id">{% for d in departments if d.id != t.department_id %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
+        <input class="form-control form-control-sm mb-2" name="reason" required placeholder="Reason">
+        <small class="text-muted d-block mb-2">The time limit keeps running.</small>
+        <button class="btn btn-sm btn-primary">Transfer</button></form></details>
+      {% endif %}
+      {% if 'priority' in acts %}
+      <details class="mb-2"><summary>Change priority</summary>
+        {{ form_start('priority') }}
+        <select class="form-select form-select-sm my-2" name="priority">{% for p in priorities %}<option value="{{ p }}" {{ 'selected' if p == t.priority }}>{{ PRIORITY_LABELS[p] }}</option>{% endfor %}</select>
+        <input class="form-control form-control-sm mb-2" name="reason" required placeholder="Reason">
+        <button class="btn btn-sm btn-primary">Save</button></form></details>
+      {% endif %}
+      {% if 'reject' in acts %}
+      <details class="mb-2"><summary>Reject</summary>
+        {{ form_start('reject') }}
+        <textarea class="form-control form-control-sm my-2" name="reason" rows="2" required placeholder="Reason (the student sees this)"></textarea>
+        <button class="btn btn-sm btn-danger">Reject</button></form></details>
+      {% endif %}
+      {% if 'cancel' in acts %}
+      <details class="mb-2"><summary>Withdraw this ticket</summary>
+        {{ form_start('cancel') }}
+        <input class="form-control form-control-sm my-2" name="reason" placeholder="Reason (optional)">
+        <button class="btn btn-sm btn-outline-danger">Withdraw</button></form></details>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+<script>
+  document.querySelectorAll('.suggest').forEach(function (b) {
+    b.addEventListener('click', function () { var box = document.getElementById('text'); box.value = b.dataset.text; box.focus(); });
+  });
+</script>
+{% endblock %}

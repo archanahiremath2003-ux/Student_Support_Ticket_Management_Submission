@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% set s = d.stats %}
+<h3>Dashboard</h3>
+<p class="text-muted">As of {{ now | ist }}. Rates are for the last 30 days.</p>
+
+<div class="row g-3 mb-4">
+  {% for label, value, color in [
+      ('Open tickets', s.open, 'primary'), ('Unassigned', s.unassigned, 'danger' if s.unassigned else 'secondary'),
+      ('Late (time limit crossed)', s.breached, 'danger' if s.breached else 'secondary'),
+      ('At risk (75% of time used)', s.at_risk, 'warning' if s.at_risk else 'secondary'),
+      ('Waiting for students', s.waiting_student, 'secondary'),
+      ('On hold' ~ (' (' ~ s.hold_overdue ~ ' past follow-up)' if s.hold_overdue else ''), s.on_hold, 'secondary'),
+      ('Resolved, student to confirm', s.to_confirm, 'secondary')] %}
+  <div class="col-6 col-md-3 col-xl"><div class="card border-{{ color }} h-100"><div class="card-body">
+    <div class="fs-3 fw-bold text-{{ color }}">{{ value }}</div><small class="text-muted">{{ label }}</small></div></div></div>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-4">
+  {% for label, value in [
+      ('Solved', s.solved_30), ('Solved within time limit', (s.in_time_pct ~ '%') if s.in_time_pct is not none else '-'),
+      ('First reply on time', (s.reply_pct ~ '%') if s.reply_pct is not none else '-'),
+      ('Avg office hours to solve', s.avg_hours if s.avg_hours is not none else '-'),
+      ('Avg calendar days to solve', s.avg_days if s.avg_days is not none else '-'),
+      ('Reopened after solving', (s.reopen_pct ~ '%') if s.reopen_pct is not none else '-')] %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card h-100"><div class="card-body">
+    <div class="fs-4 fw-bold">{{ value }}</div><small class="text-muted">{{ label }}</small></div></div></div>
+  {% endfor %}
+</div>
+
+<h5>Escalated tickets</h5>
+{% if d.escalated %}
+<div class="table-responsive bg-white border rounded mb-4"><table class="table mb-0">
+  <thead class="table-light"><tr><th>Ticket</th><th>Department</th><th>Handled by</th><th>Level</th><th class="sla-col">Time limit</th></tr></thead>
+  <tbody>{% for t in d.escalated %}<tr>
+    <td><a href="{{ url_for('ticket', ticket_id=t.id) }}">{{ t.code }}: {{ t.subject }}</a></td>
+    <td>{{ t.department.name }}</td><td>{{ t.assignee.name if t.assignee else 'Nobody' }}</td>
+    <td>{% if t.escalation_acked_level >= t.escalation_level %}<span class="badge bg-secondary">Level {{ t.escalation_level }}, acknowledged</span>
+        {% else %}<span class="badge bg-danger">Level {{ t.escalation_level }}, needs action plan</span>{% endif %}</td>
+    <td class="sla-col">{{ m.sla(d.info[t.id]) }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">No escalated tickets.</p>{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <h5>How old are open tickets</h5>
+    {% if d.ageing %}
+    <div class="table-responsive bg-white border rounded"><table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Department</th>{% for b in d.buckets %}<th class="text-end">{{ b }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for name, row in d.ageing %}<tr><td>{{ name }}</td>
+        {% for b in d.buckets %}<td class="text-end {{ 'text-danger fw-bold' if loop.last and row[b] }}">{{ row[b] }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    <small class="text-muted">Age is calendar days since the student raised it.</small>
+    {% else %}<p class="text-muted">No open tickets.</p>{% endif %}
+  </div>
+  <div class="col-lg-6">
+    <h5>Staff workload</h5>
+    {% if d.staff_rows %}
+    <div class="table-responsive bg-white border rounded"><table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Name</th><th>Department</th><th class="text-end">Open</th><th class="text-end">Late</th><th class="text-end">Solved (30 days)</th></tr></thead>
+      <tbody>{% for r in d.staff_rows %}<tr>
+        <td>{{ r.user.name }} {% if not r.user.is_active %}<span class="badge bg-secondary">Disabled</span>{% elif not r.user.available %}<span class="badge bg-warning text-dark">On leave</span>{% endif %}</td>
+        <td>{{ r.user.department.name }}</td><td class="text-end">{{ r.open }}</td>
+        <td class="text-end {{ 'text-danger fw-bold' if r.breached }}">{{ r.breached }}</td><td class="text-end">{{ r.solved_30 }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="text-muted">No staff yet. <a href="{{ url_for('new_user', role='staff') }}">Add staff</a>.</p>{% endif %}
+  </div>
+</div>
+
+{% if d.oldest %}
+<h5 class="mt-4">Oldest open tickets</h5>
+<ul class="list-group mb-4">{% for t in d.oldest %}
+  <li class="list-group-item"><a href="{{ url_for('ticket', ticket_id=t.id) }}">{{ t.code }}: {{ t.subject }}</a>
+    <small class="text-muted">, {{ t.department.name }}, open {{ t.created_at | ago(now) }}</small></li>{% endfor %}
+</ul>
+{% endif %}
+{% if d.bounced %}
+<h5>Moved between departments twice or more</h5>
+<ul class="list-group">{% for t in d.bounced %}<li class="list-group-item"><a href="{{ url_for('ticket', ticket_id=t.id) }}">{{ t.code }}: {{ t.subject }}</a></li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

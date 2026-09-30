@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs">
+          {% for key, label in [('student', 'Student'), ('staff', 'Staff'), ('admin', 'Admin')] %}
+          <li class="nav-item"><a class="nav-link {{ 'active' if role == key }}" href="{{ url_for('login', **{'as': key}) }}">{{ label }} login</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {{ csrf_field() }}
+          <div class="mb-3">
+            <label class="form-label" for="username">Username</label>
+            <input class="form-control" id="username" name="username" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-control" type="password" id="password" name="password" required>
+          </div>
+          <button class="btn btn-primary w-100">Login</button>
+        </form>
+        {% if role == 'student' %}
+        <p class="small mt-3 mb-1">New student? <a href="{{ url_for('register') }}">Create an account</a></p>
+        {% else %}
+        <p class="text-muted small mt-3 mb-1">Staff accounts are created by the admin.</p>
+        {% endif %}
+       
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
